@@ -350,6 +350,10 @@ class TextBuffer(TextBufferFindMixin, Gtk.TextBuffer):
 		self.user_action = UserActionContext(self)
 		self.showing_template = False
 
+		self._notebook_text_format = 'wiki'
+		if self.notebook is not None and hasattr(self.notebook, 'config'):
+			self._notebook_text_format = self.notebook.config['Notebook'].get('default_file_format', 'wiki')
+
 		for name in self._static_style_tags:
 			tag = self.create_tag('style-' + name, **self.tag_styles[name])
 			if name in HEADING_1_to_6:
@@ -2673,7 +2677,7 @@ class TextBuffer(TextBufferFindMixin, Gtk.TextBuffer):
 			# and get rid of oddities in our generated parsetree.
 			#print(">>> Parsetree original:\n", tree.tostring())
 			from zim.formats import get_format
-			format = get_format("wiki") # FIXME should the format used here depend on the store ?
+			format = get_format(self._notebook_text_format)
 			dumper = format.Dumper()
 			parser = format.Parser()
 			text = dumper.dump(tree)
@@ -3124,7 +3128,7 @@ class TextBuffer(TextBufferFindMixin, Gtk.TextBuffer):
 			if tags:
 				text_format = 'verbatim-' + tags[0].zim_tag
 			else:
-				text_format = 'wiki' # TODO: should depend on page format
+				text_format = self._notebook_text_format
 		parsetree = clipboard.get_parsetree(self.notebook, self.page, text_format)
 		if not parsetree:
 			return

@@ -1011,7 +1011,7 @@ class TextView(Gtk.TextView):
 		line = start.get_text(end)
 		#~ print('LINE >>%s<<' % line)
 		l = len(line)
-		is_hr = (l >= 3) and (line == '-' * l)
+		is_hr = (l >= 5) and (line == '-' * l)
 
 		m_head = heading_re.match(line)
 

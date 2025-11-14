@@ -27,6 +27,7 @@ class TestFormatMixin(object):
 		'latex': 'export.tex',
 		'markdown': 'export.markdown',
 		'reST': 'export.rst',
+		'rnb': 'rnb.md',
 	}
 
 	def testFormatInfo(self):
@@ -1052,3 +1053,8 @@ Blaat
 
 		out = dump_header_lines(meta)
 		self.assertEqual(out + '\nBlaat\n', text)
+
+class TestRnbFormat(tests.TestCase, TestFormatMixin):
+
+	def setUp(self):
+		self.format = get_format('rnb')

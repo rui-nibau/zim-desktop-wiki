@@ -92,7 +92,7 @@ class FilesLayout(NotebookLayout):
 			if encode_filename(pname) != name: # will reject e.g. whitespace in file name
 				return False
 
-			if self.default_extension == '.txt':
+			if self.default_extension == '.txt': # FIXME: Why only txt files ?
 				try:
 					line = file.readline(size=50) # max size to allow for some trailing whitespace and end-of-line
 					return line.strip().startswith('Content-Type: text/x-zim-') # XXX Allow specific Content-Type

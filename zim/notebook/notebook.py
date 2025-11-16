@@ -60,8 +60,8 @@ class NotebookConfig(INIConfigFile):
 			('paste_image_template', String('pasted_image_%y%m%d')),
 			('endofline', Choice(endofline, {'dos', 'unix'})),
 			('disable_trash', Boolean(False)),
-			('default_file_format', String('zim-wiki')),
-			('default_file_extension', String('.txt')),
+			('default_file_format', String(zim.formats.DEFAULT_FILE_FORMAT)),
+			('default_file_extension', String(zim.formats.DEFAULT_FILE_EXTENSION)),
 			('notebook_layout', String('files')),
 		))
 
@@ -1166,3 +1166,15 @@ class Notebook(ConnectorMixin, SignalEmitter):
 
 		parser = zim.formats.get_parser('wiki')
 		return parser.parse(lines)
+
+def valid_file_format(file_format):
+	'''Get a valid file format for files in a notebook'''
+	return zim.formats.valid_file_format(file_format)
+
+def valid_file_extension(file_extension):
+	'''Get a valid file extension for files in a notebook'''
+	if file_extension:
+		if not file_extension.startswith('.'): # XXX: Maybe other checks
+			file_extension = '.' + file_extension
+		return file_extension
+	return zim.formats.DEFAULT_FILE_EXTENSION

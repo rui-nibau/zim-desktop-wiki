@@ -23,6 +23,7 @@ import zim.main
 from zim.newfs import FilePath, LocalFile, LocalFolder
 from zim.notebook import get_notebook_list, get_notebook_info, init_notebook, NotebookInfo
 from zim.config import data_file
+from zim.formats import file_formats_for_notebook, DEFAULT_FILE_EXTENSION
 from zim.gui.widgets import Dialog, IconButton, encode_markup_text, ScrolledWindow, \
 	strip_boolean_result
 
@@ -60,7 +61,7 @@ def prompt_notebook():
 		fields = _run_dialog_with_mainloop(AddNotebookDialog(None))
 		if fields:
 			dir = LocalFolder(fields['folder'])
-			init_notebook(dir, name=fields['name'])
+			init_notebook(dir, name=fields['name'], file_format=fields['format'], file_extension=fields['extension'])
 			list.append(NotebookInfo(dir.uri, name=fields['name']))
 			list.write()
 			return NotebookInfo(dir.uri, name=fields['name'])
@@ -372,7 +373,8 @@ class NotebookDialog(Dialog):
 		fields = AddNotebookDialog(self).run()
 		if fields:
 			dir = LocalFolder(fields['folder'])
-			init_notebook(dir, name=fields['name'])
+			init_notebook(dir, name=fields['name'], file_format=fields['format'],
+				file_extension=fields['extension'])
 			model = self.treeview.get_model()
 			model.append_notebook(dir.uri, name=fields['name'])
 
@@ -419,12 +421,17 @@ class AddNotebookDialog(Dialog):
 			folder = nb_folder + name
 		# else set below by _changed methods
 
+		file_formats = file_formats_for_notebook()
 		self.add_form((
 			('name', 'string', _('Name')), # T: input field in 'Add Notebook' dialog
 			('folder', 'dir', _('Folder')), # T: input field in 'Add Notebook' dialog
+			('format', 'choice', _('File Format'), file_formats), # T: input field in 'Add Notebook' dialog
+			('extension', 'string', _('File extension')), # T: input field in 'Add Notebook' dialog
 		), {
 			'name': name,
 			'folder': folder,
+			'extension': DEFAULT_FILE_EXTENSION,
+			'format': file_formats[0],
 		})
 
 		self.add_help_text(_('''\
@@ -486,7 +493,8 @@ Of course you can also select an existing zim notebook folder.
 		name = self.form['name']
 		folder = self.form['folder']
 		if name and folder:
-			self.result = {'name': name, 'folder': folder}
+			self.result = {'name': name, 'folder': folder, 'format': self.form['format'],
+				'extension': self.form['extension']}
 			return True
 		else:
 			return False

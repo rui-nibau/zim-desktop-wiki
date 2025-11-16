@@ -283,6 +283,9 @@ class Notebook(ConnectorMixin, SignalEmitter):
 		self.index = index
 		self._operation_check = NOOP
 
+		logger.debug('Notebook file format=%s, file extension=%s', 
+			config['Notebook']['default_file_format'], config['Notebook']['default_file_extension'])
+
 		self.readonly = not _iswritable(folder)
 
 		if self.readonly:

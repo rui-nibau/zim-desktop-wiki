@@ -48,7 +48,7 @@ from .operations import NotebookOperation, SimpleAsyncOperation, \
 
 from .notebook import Notebook, NotebookExtension, TrashNotSupportedError, \
 	PageNotFoundError, PageNotAllowedError, PageNotAvailableError, \
-	PageExistsError
+	PageExistsError, valid_file_format, valid_file_extension
 
 from .page import Path, Page, PageReadOnlyError, \
 	HRef, HREF_REL_ABSOLUTE, HREF_REL_FLOATING, HREF_REL_RELATIVE
@@ -190,10 +190,12 @@ class ApplicationMountPointHandler(object):
 			return path.exists()
 
 
-def init_notebook(dir, name=None):
+def init_notebook(dir, name=None, file_format=None, file_extension=None):
 	'''Initialize a new notebook in a directory'''
 	from .notebook import NotebookConfig
 	dir.touch()
 	config = NotebookConfig(dir.file('notebook.zim'))
 	config['Notebook']['name'] = name or dir.basename
+	config['Notebook']['default_file_format'] = valid_file_format(file_format)
+	config['Notebook']['default_file_extension'] = valid_file_extension(file_extension)
 	config.write()

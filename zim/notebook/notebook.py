@@ -1166,3 +1166,15 @@ class Notebook(ConnectorMixin, SignalEmitter):
 
 		parser = zim.formats.get_parser('wiki')
 		return parser.parse(lines)
+
+def valid_file_format(file_format):
+	'''Get a valid file format for files in a notebook'''
+	return zim.formats.valid_file_format(file_format)
+
+def valid_file_extension(file_extension):
+	'''Get a valid file extension for files in a notebook'''
+	if file_extension:
+		if not file_extension.startswith('.'): # XXX: Maybe other checks
+			file_extension = '.' + file_extension
+		return file_extension
+	return zim.formats.DEFAULT_FILE_EXTENSION

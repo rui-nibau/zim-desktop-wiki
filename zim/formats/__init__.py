@@ -166,8 +166,8 @@ OBJECT_LIKE = (OBJECT, TABLE, LINE) # Do not include trailing newline
 TEXT = 'T'
 END = '/'
 
-DEFAULT_FILE_FORMAT = 'zim-wiki'
-DEFAULT_FILE_EXTENSION = '.txt'
+DEFAULT_FILE_FORMAT = 'rnb'
+DEFAULT_FILE_EXTENSION = '.md'
 
 
 _letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -242,7 +242,7 @@ def canonical_name(name):
 
 def file_formats_for_notebook():
 	'''Get a tuple of valid file formats for notebooks. Default is first.'''
-	return (DEFAULT_FILE_FORMAT,)
+	return (DEFAULT_FILE_FORMAT, 'zim-wiki')
 
 def valid_file_format(file_format):
 	'''Get a valid file format for notebook. Th given file_format if it is valid or the default one'''

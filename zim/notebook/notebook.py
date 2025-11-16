@@ -60,8 +60,8 @@ class NotebookConfig(INIConfigFile):
 			('paste_image_template', String('pasted_image_%y%m%d')),
 			('endofline', Choice(endofline, {'dos', 'unix'})),
 			('disable_trash', Boolean(False)),
-			('default_file_format', String(zim.formats.DEFAULT_FILE_FORMAT)),
-			('default_file_extension', String(zim.formats.DEFAULT_FILE_EXTENSION)),
+			('default_file_format', String('zim-wiki')),
+			('default_file_extension', String('.txt')),
 			('notebook_layout', String('files')),
 		))
 
@@ -282,6 +282,9 @@ class Notebook(ConnectorMixin, SignalEmitter):
 		self.layout = layout
 		self.index = index
 		self._operation_check = NOOP
+
+		logger.debug('Notebook file format=%s, file extension=%s', 
+			config['Notebook']['default_file_format'], config['Notebook']['default_file_extension'])
 
 		self.readonly = not _iswritable(folder)
 

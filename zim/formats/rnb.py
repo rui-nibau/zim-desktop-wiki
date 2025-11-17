@@ -186,9 +186,11 @@ class WikiParser(object):
 			),
 			# standard table format
 			Rule(TABLE, r'''
+				^\|-{10,}\|\s*?\n								# line open
 				^(\|.*\|) \s*? \n								# starting and ending with |
 				^( (?:\| [ \|\-:]+ \| \s*? \n)? )				# column align
 				( (?:^\|.*\| \s*? \n)+ )							# multi-lines: starting and ending with |
+				^\|-{10,}\|\s*?\n								# line close
 				''',
 				process=self.parse_table
 			),

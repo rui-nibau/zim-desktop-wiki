@@ -111,7 +111,7 @@ class WikiParser(object):
 		descent = lambda *a: self.inline_parser(*a)
 		return (
 			Rule(LINK, my_url_re, process=self.parse_url)
-			| Rule(LINK, r'\[([^\]]*)\]\(([^\(]*)\)', process=self.parse_link)
+			| Rule(LINK, r'\[([^\]]*)\]\(([^\(\)]*)\)', process=self.parse_link)
 			| Rule(ANCHOR, r'\{\{id:\s+(\w[\w-]+)\s*\}\}', process=self.parse_anchor) # HACK, hardcode inline object syntax
 			| Rule(IMAGE, r'!\[(.*)\]\((.*?)\)', process=self.parse_image)
 			| Rule(TAG, r'(?<!\S)@\w+', process=self.parse_tag)

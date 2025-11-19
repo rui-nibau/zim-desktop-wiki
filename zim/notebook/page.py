@@ -551,7 +551,7 @@ class Page(Path, SignalEmitter):
 			else: # not self.source_file.exists()
 				now = datetime.now()
 				tree.meta['Creation-Date'] = now.isoformat()
-
+			tree.meta['Modification-Date'] = datetime.now().isoformat()
 			lines = self.format.Dumper().dump(tree, file_output=True)
 			self._last_etag = self.source_file.writelines_with_etag(lines, self._last_etag)
 			self._meta = tree.meta

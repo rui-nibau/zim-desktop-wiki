@@ -1175,7 +1175,7 @@ class TextBuffer(TextBufferFindMixin, Gtk.TextBuffer):
 		except KeyError:
 			# HACK - if table plugin is not loaded - show table as plain text
 			tree = ParseTree(element)
-			lines = get_dumper('wiki').dump(tree)
+			lines = get_dumper(self._notebook_text_format).dump(tree)
 			self.insert_object_at_cursor({'type': 'table'}, ''.join(lines))
 		else:
 			model = obj.model_from_element(element.attrib, element)

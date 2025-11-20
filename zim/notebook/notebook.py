@@ -1166,8 +1166,7 @@ class Notebook(ConnectorMixin, SignalEmitter):
 			mycontext.update(context)
 		self.emit('init-page-template', path, template) # plugin hook
 		template.process(lines, mycontext)
-
-		parser = zim.formats.get_parser('wiki')
+		parser = self.layout.default_format.Parser()
 		return parser.parse(lines)
 
 def valid_file_format(file_format):

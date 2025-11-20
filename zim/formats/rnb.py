@@ -668,12 +668,16 @@ class Dumper(TextDumper):
 
 		aligns, wraps = TableParser.get_options(attrib)
 		maxwidths = TableParser.width2dim(rows)
+		line_size = sum(maxwidths) + (2 * n) + (n - 1)
 
 		lines = [
+			'|' + ('-' * line_size) + '|\n',
 			TableParser.headline(rows[0], maxwidths, aligns, wraps) + '\n',
 			TableParser.headsep(maxwidths, aligns, x='|', y='-') + '\n'
 		] + [
 			TableParser.rowline(row, maxwidths, aligns) + '\n' for row in rows[1:]
+		] + [
+			'|' + ('-' * line_size) + '|\n',
 		]
 		return lines
 

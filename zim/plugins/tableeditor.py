@@ -41,13 +41,13 @@ SYNTAX_CELL_INPUT = [
 SYNTAX_WIKI_PANGO2 = [
 	(r'<strong>\1</strong>', r'<b>\1</b>', r'**\1**'),
 	(r'<mark>\1</mark>', r'<span background="yellow">\1</span>', r'__\1__'),
-	(r'<code>\1</code>', r'<tt>\1</tt>', r"''\1''"),
+	(r'<code>\1</code>', r'<tt>\1</tt>', r"``\1``"),
 	(r'<strike>\1</strike>', r'<s>\1</s>', r'~~\1~~'),
 	# Link url without link text  - Link url has always size = 1 to stay hidden FIXME: hacky
-	(r'<link href="\1">\1</link>', r'<span foreground="blue"><span size="1">\1</span>\1</span>', r'[[\1]]'),
+	(r'<link href="\1">\1</link>', r'<span foreground="blue"><span size="1">\1</span>\1</span>', r'[\1](\1)'),
 	# Link url with link text  - Link url has always size = 1 to stay hidden FIXME: hacky
-	(r'<link href="\1">\2</link>', r'<span foreground="blue"><span size="1">\1</span>\2</span>', r'[[\1|\2]]'),
-	(r'<emphasis>\1</emphasis>', r'<i>\1</i>', r'//\1//')
+	(r'<link href="\1">\2</link>', r'<span foreground="blue"><span size="1">\1</span>\2</span>', r'[\2](\1)'),
+	(r'<emphasis>\1</emphasis>', r'<i>\1</i>', r'\'\'\1\'\'')
 ]
 
 # Possible alignments in edit-table-dialog

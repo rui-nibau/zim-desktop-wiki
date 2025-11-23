@@ -27,6 +27,7 @@ from zim.config.manager import ConfigManager
 from zim.formats import file_formats_for_notebook, DEFAULT_FILE_EXTENSION
 from zim.gui.widgets import Dialog, IconButton, encode_markup_text, ScrolledWindow, \
 	strip_boolean_result
+from zim.templates import list_templates
 
 logger = logging.getLogger('zim.gui.notebookdialog')
 
@@ -62,7 +63,8 @@ def prompt_notebook():
 		fields = _run_dialog_with_mainloop(AddNotebookDialog(None))
 		if fields:
 			dir = LocalFolder(fields['folder'])
-			init_notebook(dir, name=fields['name'], file_format=fields['format'], file_extension=fields['extension'])
+			init_notebook(dir, name=fields['name'], file_format=fields['format'],
+				file_extension=fields['extension'], page_template=fields['template'])
 			list.append(NotebookInfo(dir.uri, name=fields['name']))
 			list.write()
 			return NotebookInfo(dir.uri, name=fields['name'])
@@ -381,7 +383,7 @@ class NotebookDialog(Dialog):
 		if fields:
 			dir = LocalFolder(fields['folder'])
 			init_notebook(dir, name=fields['name'], file_format=fields['format'],
-				file_extension=fields['extension'])
+				file_extension=fields['extension'], page_template=fields['template'])
 			model = self.treeview.get_model()
 			model.append_notebook(dir.uri, name=fields['name'])
 
@@ -427,6 +429,8 @@ class AddNotebookDialog(Dialog):
 			name = 'Notes'
 			folder = nb_folder + name
 		# else set below by _changed methods
+		
+		templates = [t[0] for t in list_templates('wiki')]
 
 		file_formats = file_formats_for_notebook()
 		self.add_form((
@@ -434,11 +438,13 @@ class AddNotebookDialog(Dialog):
 			('folder', 'dir', _('Folder')), # T: input field in 'Add Notebook' dialog
 			('format', 'choice', _('File Format'), file_formats), # T: input field in 'Add Notebook' dialog
 			('extension', 'string', _('File extension')), # T: input field in 'Add Notebook' dialog
+			('template', 'choice', _('Page template'), templates),  # T: choice field in 'Add Notebook' dialog
 		), {
 			'name': name,
 			'folder': folder,
 			'extension': DEFAULT_FILE_EXTENSION,
 			'format': file_formats[0],
+			'template': 'Default',
 		})
 
 		self.add_help_text(_('''\
@@ -501,7 +507,7 @@ Of course you can also select an existing zim notebook folder.
 		folder = self.form['folder']
 		if name and folder:
 			self.result = {'name': name, 'folder': folder, 'format': self.form['format'],
-				'extension': self.form['extension']}
+				'extension': self.form['extension'], 'template': self.form['template']}
 			return True
 		else:
 			return False

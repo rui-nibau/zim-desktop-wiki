@@ -217,7 +217,7 @@ class TableViewObjectType(InsertedObjectTypeExtension):
 		return TableModel(attrib, headers, rows)
 
 	def model_from_data(self, notebook, page, attrib, data):
-		file_format = notebook.config['Notebook'].get('default_file_format', 'wiki')
+		file_format = notebook.file_format
 		parser = get_parser(file_format)
 		tree = parser.parse(data)
 		element = tree._etree.getroot().find('table') # XXX - should use token interface instead

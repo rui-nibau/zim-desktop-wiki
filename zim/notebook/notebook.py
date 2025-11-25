@@ -254,7 +254,7 @@ class Notebook(ConnectorMixin, SignalEmitter):
 			layout = FilesLayout(
 				folder,
 				config['Notebook']['endofline'],
-				config['Notebook']['default_file_format'],
+				_get_valid_format_from_config(config),
 				config['Notebook']['default_file_extension']
 			)
 		else:
@@ -284,8 +284,10 @@ class Notebook(ConnectorMixin, SignalEmitter):
 		self.index = index
 		self._operation_check = NOOP
 
-		logger.debug('Notebook file format=%s, file extension=%s', 
-			config['Notebook']['default_file_format'], config['Notebook']['default_file_extension'])
+		self._file_format = _get_valid_format_from_config(config)
+
+		logger.debug('Notebook file format=%s, file extension=%s', self._file_format,
+			config['Notebook']['default_file_extension'])
 
 		self.readonly = not _iswritable(folder)
 
@@ -374,6 +376,12 @@ class Notebook(ConnectorMixin, SignalEmitter):
 		signal.
 		'''
 		return self.emit_return_first('suggest-link', source, word)
+
+	@property
+	def file_format(self):
+		'''Returns the syntax used for the pages of this notebook. It fallbacks to the default 
+		wiki syntax ('zim-wiki') if the format in config is unknown.'''
+		return self._file_format
 
 	def get_page(self, path):
 		'''Get a L{Page} object for a given path
@@ -1182,3 +1190,15 @@ def valid_file_extension(file_extension):
 			file_extension = '.' + file_extension
 		return file_extension
 	return zim.formats.DEFAULT_FILE_EXTENSION
+
+def _get_valid_format_from_config(config):
+	'''returns a valid file format from config. Returns XXXX
+	@param config: L{NotebookConfig}
+	@returns: L{str}'''
+	config_format = config['Notebook']['default_file_format']
+	valid_format = valid_file_format(config_format)
+	if valid_format != config_format:
+		logger.warning('Notebook file format "%s" unknown, using default format "%s"',
+			config_format, valid_format)
+		return valid_format
+	return config_format

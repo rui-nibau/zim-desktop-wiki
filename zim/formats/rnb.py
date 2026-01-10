@@ -76,7 +76,7 @@ class WikiParser(object):
 		'[*]': CHECKED_BOX,
 		'[>]': MIGRATED_BOX,
 		'[<]': TRANSMIGRATED_BOX,
-		'*': BULLET,
+		'•': BULLET,
 	}
 
 	def __init__(self, backward_indented_blocks=False, backward_url_parsing=False):
@@ -558,7 +558,7 @@ class Dumper(TextDumper):
 		CHECKED_BOX: '[*]',
 		MIGRATED_BOX: '[>]',
 		TRANSMIGRATED_BOX: '[<]',
-		BULLET: '*',
+		BULLET: '•',
 	}
 
 	TAGS = {

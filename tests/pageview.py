@@ -1919,7 +1919,7 @@ Foo 123
 			self.fail('No object in tree')
 
 		buffer.set_parsetree(tree)
-		self.assertEqual(len(list(view._object_widgets)), 1) # assert there is an object in the view
+		self.assertEqual(len(list(view.get_inserted_object_widgets())), 1) # assert there is an object in the view
 		self.assertParseTreeEqual(buffer, tree) # assert stable over roundtrip
 
 	def testPopup(self):
@@ -3403,9 +3403,11 @@ class TestPageViewActions(tests.TestCase):
 		self.assertTrue(pageview.find_bar.get_property('visible'))
 
 	def testShowFindWithQuery_FindNext_FindPrevious(self):
+		from zim.gui.pageview.find import FindQuery
+
 		pageview = setUpPageView(self.setUpNotebook(), 'test 123\n')
 		self.assertFalse(pageview.find_bar.get_property('visible'))
-		pageview.show_find('test')
+		pageview.show_find(FindQuery('test'))
 		self.assertTrue(pageview.find_bar.get_property('visible'))
 
 		pageview.find_next()

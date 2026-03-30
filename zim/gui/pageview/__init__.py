@@ -28,6 +28,8 @@ from gi.repository import Gtk
 import re
 import functools
 
+from typing import Optional
+
 import zim.formats
 import zim.errors
 
@@ -1025,9 +1027,9 @@ class PageView(GSignalEmitterMixin, Gtk.VBox):
 		self._save_page_handler.wait_for_store_page_async()
 
 	def _hack_on_inserted_tree(self, *a):
-		if self.textview._object_widgets:
+		if self.textview.get_inserted_object_widgets():
 			# Force resize of the scroll window, forcing a redraw to fix
-			# glitch in allocation of embedded obejcts, see isse #642
+			# glitch in allocation of embedded obejcts, see issue #642
 			# Will add another timeout to rendering the page, increasing the
 			# priority breaks the hack though. Which shows the glitch is
 			# probably also happening in a drawing or resizing idle event
@@ -2076,16 +2078,15 @@ class PageView(GSignalEmitterMixin, Gtk.VBox):
 		MoveTextDialog(self, self.notebook, self.page, buffer, self.navigation).run()
 
 	@action(_('_Find...'), '<Primary>F', alt_accelerator='<Primary>F3') # T: Menu item
-	def show_find(self, string=None, flags=0, highlight=False):
+	def show_find(self, query: Optional['FindQuery']=None, highlight: bool=False):
 		'''Show the L{FindBar} widget
 
-		@param string: the text to find
-		@param flags: options for find behavior, see L{TextFinder.find()}
+		@param query: a FindQuery for the text to find
 		@param highlight: if C{True} highlight the results
 		'''
 		self.find_bar.show()
-		if string:
-			self.find_bar.find(string, flags, highlight)
+		if query:
+			self.find_bar.find(query, highlight)
 		self.find_bar.grab_focus()
 
 	def hide_find(self):

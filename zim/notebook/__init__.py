@@ -38,7 +38,7 @@ logger = logging.getLogger('notebook.zim')
 
 from zim.newfs import FileNotFoundError, localFileOrFolder, LocalFolder, FilePath
 from zim.parse.encode import url_decode
-
+from zim.templates import valid_template_name
 
 from .info import NotebookInfo, NotebookInfoList, \
 	resolve_notebook, get_notebook_list, get_notebook_info, interwiki_link, create_valid_interwiki_key
@@ -190,12 +190,13 @@ class ApplicationMountPointHandler(object):
 			return path.exists()
 
 
-def init_notebook(dir, name=None, file_format=None, file_extension=None):
+def init_notebook(dir, name=None, page_template='Default', file_format=None, file_extension=None):
 	'''Initialize a new notebook in a directory'''
 	from .notebook import NotebookConfig
 	dir.touch()
 	config = NotebookConfig(dir.file('notebook.zim'))
 	config['Notebook']['name'] = name or dir.basename
+	config['Notebook']['default_page_template'] = valid_template_name('wiki', page_template)
 	config['Notebook']['default_file_format'] = valid_file_format(file_format)
 	config['Notebook']['default_file_extension'] = valid_file_extension(file_extension)
 	config.write()

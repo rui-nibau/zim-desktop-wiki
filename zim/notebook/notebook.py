@@ -60,8 +60,8 @@ class NotebookConfig(INIConfigFile):
 			('paste_image_template', String('pasted_image_%y%m%d')),
 			('endofline', Choice(endofline, {'dos', 'unix'})),
 			('disable_trash', Boolean(False)),
-			('default_file_format', String('zim-wiki')),
-			('default_file_extension', String('.txt')),
+			('default_file_format', Choice('zim-wiki', {'zim-wiki', 'markdown'})),
+			('default_file_extension', String('.txt')), # should match default_file_format
 			('default_page_template', String('Default')),
 			('notebook_layout', String('files')),
 		))
@@ -213,7 +213,7 @@ class Notebook(ConnectorMixin, SignalEmitter):
 		'page-info-changed': (SIGNAL_NORMAL, None, (object,)),
 		'get-page-template': (SIGNAL_NORMAL, str, (object,)),
 		'init-page-template': (SIGNAL_NORMAL, None, (object, object)),
-
+ 
 		# Hooks
 		'suggest-link': (SIGNAL_NORMAL, object, (object, object)),
 	}
@@ -253,11 +253,12 @@ class Notebook(ConnectorMixin, SignalEmitter):
 		if config['Notebook']['notebook_layout'] == 'files':
 			layout = FilesLayout(
 				folder,
-				config['Notebook']['endofline'],
-				_get_valid_format_from_config(config),
-				config['Notebook']['default_file_extension']
+				default_format=_get_valid_format_from_config(config['Notebook']['default_file_format']),
+				default_extension=config['Notebook']['default_file_extension'],
+				endofline=config['Notebook']['endofline']
 			)
 		else:
+			# FUTURE extend here to support more classes
 			raise ValueError('Unkonwn notebook layout: %s' % config['Notebook']['notebook_layout'])
 
 		cache_dir.touch() # must exist for index to work
@@ -283,11 +284,6 @@ class Notebook(ConnectorMixin, SignalEmitter):
 		self.layout = layout
 		self.index = index
 		self._operation_check = NOOP
-
-		self._file_format = _get_valid_format_from_config(config)
-
-		logger.debug('Notebook file format=%s, file extension=%s', self._file_format,
-			config['Notebook']['default_file_extension'])
 
 		self.readonly = not _iswritable(folder)
 
@@ -367,6 +363,7 @@ class Notebook(ConnectorMixin, SignalEmitter):
 			self.icon = None
 		self.document_root = document_root
 
+		self.layout.set_format(properties['default_file_format'], properties['default_file_extension'])
 		self.interwiki = create_valid_interwiki_key(properties['interwiki'] or self.name)
 
 	def suggest_link(self, source, word):
@@ -376,12 +373,6 @@ class Notebook(ConnectorMixin, SignalEmitter):
 		signal.
 		'''
 		return self.emit_return_first('suggest-link', source, word)
-
-	@property
-	def file_format(self):
-		'''Returns the syntax used for the pages of this notebook. It fallbacks to the default 
-		wiki syntax ('zim-wiki') if the format in config is unknown.'''
-		return self._file_format
 
 	def get_page(self, path):
 		'''Get a L{Page} object for a given path
@@ -1142,61 +1133,58 @@ class Notebook(ConnectorMixin, SignalEmitter):
 		'''
 		return self.layout.get_attachments_folder(path)
 
-	def get_template(self, path, context=None):
-		'''Get a template for the intial text on new pages
+	def get_new_page_template(self, path, support_cursor=False) -> 'ParseTree':
+		'''Get and evaluate template for the intial text on new pages
 		@param path: a L{Path} object
-		@param context: optional dict with additional context parameters
+		@param support_cursor: bool whether "place_cursor" is supported in the template, if so, it
+		will be evaluated with unicode character "\\ufffe"
 		@returns: a L{ParseTree} object
 		'''
 		# FIXME hardcoded that template must be wiki format
 
-		template = self.get_page_template_name(path)
+		template = self.get_new_page_template_name(path)
 		logger.debug('Got page template \'%s\' for %s', template, path)
-		template = zim.templates.get_template('wiki', template)
-		return self.eval_new_page_template(path, template, context)
+		template = zim.templates.get_template('wiki', template) # TODO: make template format flexible
+		return self.eval_new_page_template(path, template, support_cursor)
 
-	def get_page_template_name(self, path=None):
+	def get_new_page_template_name(self, path=None):
 		'''Returns the name of the template to use for a new page.
 		(To get the contents of the template directly, see L{get_template()})
 		'''
 		default_page_template = self.config['Notebook'].get('default_page_template', 'Default')
 		return self.emit_return_first('get-page-template', path or Path(':')) or default_page_template
 
-	def eval_new_page_template(self, path, template, context=None):
+	def eval_new_page_template(self, path, template, support_cursor=False) -> 'ParseTree':
+		'''Evaluate a template for the intial text on new pages
+		@param path: a L{Path} object
+		@param template: a template onkect
+		@param support_cursor: bool whether "place_cursor" is supported in the template, if so, it
+		will be evaluated with unicode character "\\ufffe"
+		'''
+		from zim.templates.expression import ExpressionFunction
+		CURSOR_CHAR = '\ufffe' # unicode "non-character"
+
 		lines = []
+		cursor_replace = CURSOR_CHAR if support_cursor else ''
 		mycontext = {
 			'page': {
 				'name': path.name,
 				'basename': path.basename,
 				'section': path.namespace,
 				'namespace': path.namespace, # backward compat
-			}
+			},
+			'place_cursor': ExpressionFunction(lambda: cursor_replace),
 		}
-		if context:
-			mycontext.update(context)
 		self.emit('init-page-template', path, template) # plugin hook
 		template.process(lines, mycontext)
 		parser = self.layout.default_format.Parser()
 		return parser.parse(lines)
 
-def valid_file_format(file_format):
-	'''Get a valid file format for files in a notebook'''
-	return zim.formats.valid_file_format(file_format)
-
-def valid_file_extension(file_extension):
-	'''Get a valid file extension for files in a notebook'''
-	if file_extension:
-		if not file_extension.startswith('.'): # XXX: Maybe other checks
-			file_extension = '.' + file_extension
-		return file_extension
-	return zim.formats.DEFAULT_FILE_EXTENSION
-
-def _get_valid_format_from_config(config):
+def _get_valid_format_from_config(config_format):
 	'''returns a valid file format from config. Returns XXXX
-	@param config: L{NotebookConfig}
+	@param config_format: L{str}
 	@returns: L{str}'''
-	config_format = config['Notebook']['default_file_format']
-	valid_format = valid_file_format(config_format)
+	valid_format = zim.formats.valid_file_format(config_format)
 	if valid_format != config_format:
 		logger.warning('Notebook file format "%s" unknown, using default format "%s"',
 			config_format, valid_format)

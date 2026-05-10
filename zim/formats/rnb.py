@@ -29,6 +29,7 @@ info = {
 	'desc': 'RNB format (markdown)',
 	'mimetype': 'text/x-zim-rnb',
 	'extension': 'md',
+	'extensions': ('md',),
 	'native': True,
 	'import': True,
 	'export': True,

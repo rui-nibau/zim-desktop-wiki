@@ -60,7 +60,7 @@ class NotebookConfig(INIConfigFile):
 			('paste_image_template', String('pasted_image_%y%m%d')),
 			('endofline', Choice(endofline, {'dos', 'unix'})),
 			('disable_trash', Boolean(False)),
-			('default_file_format', Choice('zim-wiki', {'zim-wiki', 'markdown'})),
+			('default_file_format', Choice('rnb', {'rnb', 'zim-wiki', 'markdown'})),
 			('default_file_extension', String('.txt')), # should match default_file_format
 			('default_page_template', String('Default')),
 			('notebook_layout', String('files')),

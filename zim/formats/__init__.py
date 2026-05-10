@@ -227,6 +227,7 @@ def list_formats(type):
 		]
 	elif type == TEXT_FORMAT:
 		return [
+				('rnb', 'rnb'),
 				('plain', 'Text'),
 				('zim-wiki', 'Zim Wiki'),
 				('markdown', 'Markdown (pandoc)'),

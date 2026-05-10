@@ -126,7 +126,7 @@ ui_preferences = (
 		_('Reformat wiki markup on the fly'), False),
 		# T: option in preferences dialog
 	('copy_format', 'choice', 'Editing',
-		_('Default format for copying text to the clipboard'), 'Text', COPY_FORMATS),
+		_('Default format for copying text to the clipboard'), 'plain', COPY_FORMATS),
 		# T: option in preferences dialog
 	('file_templates_folder', 'dir', 'Editing',
 		_('Folder with templates for attachment files'), XDG_TEMPLATES_DIR),
@@ -626,7 +626,7 @@ class PageView(GSignalEmitterMixin, Gtk.VBox):
 			recursive_indentlist=Boolean(True),
 			recursive_checklist=Boolean(False),
 			auto_reformat=Boolean(False),
-			copy_format=Choice('Text', COPY_FORMATS),
+			copy_format=Choice('plain', COPY_FORMATS),
 			file_templates_folder=String('~/Templates'),
 		)
 
@@ -981,9 +981,7 @@ class PageView(GSignalEmitterMixin, Gtk.VBox):
 			# HACK: using None value instead of "hascontent" to distinguish
 			# between a page without source and an existing empty page
 			CURSOR_CHAR = '\ufffe' # unicode "non-character"
-			parsetree = self.notebook.get_template(self.page,
-				{'place_cursor': ExpressionFunction(lambda: CURSOR_CHAR)}
-			)
+			parsetree = self.notebook.get_new_page_template(self.page, support_cursor=True)
 			buffer.set_parsetree(parsetree, showing_template=True)
 			start, end = buffer.get_bounds()
 			start.forward_find_char(lambda c,x: c == CURSOR_CHAR)
@@ -1374,13 +1372,12 @@ class PageView(GSignalEmitterMixin, Gtk.VBox):
 		buffer = self.textview.get_buffer()
 
 		### Copy As option ###
-		default = self.preferences['copy_format'].lower()
+		default = self.preferences['copy_format']
 		copy_as_menu = Gtk.Menu()
-		for label in COPY_FORMATS:
-			if label.lower() == default:
+		for format, label in COPY_FORMATS:
+			if format == default:
 				continue # Covered by default Copy action
 
-			format = zim.formats.canonical_name(label)
 			item = Gtk.MenuItem.new_with_mnemonic(label)
 			if buffer.get_has_selection():
 				item.connect('activate',

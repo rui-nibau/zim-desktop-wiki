@@ -129,7 +129,7 @@ class FilesLayout(NotebookLayout):
 			if self.supported_extensions[ext].info['mimetype'] == 'text/x-zim-wiki':
 				try:
 					line = file.readline(size=50) # max size to allow for some trailing whitespace and end-of-line
-					return line.strip().startswith('Content-Type: text/x-zim-') # XXX Allow specific Content-Type
+					return line.strip() == 'Content-Type: text/x-zim-wiki'
 				except FileNotFoundError:
 					return True # give file the benefit of the doubt, could be a deleted source file
 			else:

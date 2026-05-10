@@ -23,7 +23,6 @@ from zim.newfs import FilePath, LocalFile, LocalFolder
 from zim.formats import list_formats, NATIVE_FORMAT
 from zim.notebook import get_notebook_list, get_notebook_info, init_notebook, NotebookInfo
 from zim.config import data_file
-from zim.formats import file_formats_for_notebook, DEFAULT_FILE_EXTENSION
 from zim.config.manager import ConfigManager
 from zim.gui.widgets import Dialog, IconButton, encode_markup_text, ScrolledWindow, strip_boolean_result
 from zim.templates import list_templates
@@ -63,8 +62,8 @@ def prompt_notebook():
 		fields = _run_dialog_with_mainloop(AddNotebookDialog(None))
 		if fields:
 			dir = LocalFolder(fields['folder'])
-			init_notebook(dir, name=fields['name'], page_template=fields['default_page_template'], 
-				file_format=fields['file_format'], file_extension=fields['extension'])
+			init_notebook(dir, name=fields['name'], page_template=fields['default_page_template'],
+				file_format=fields['file_format'])
 			list.append(NotebookInfo(dir.uri, name=fields['name']))
 			list.write()
 			return NotebookInfo(dir.uri, name=fields['name'])
@@ -386,7 +385,6 @@ class NotebookDialog(Dialog):
 				dir, name=fields['name'],
 				page_template=fields['default_page_template'],
 				file_format=fields['file_format'],
-				file_extension=fields['extension']
 			)
 			model = self.treeview.get_model()
 			model.append_notebook(dir.uri, name=fields['name'])

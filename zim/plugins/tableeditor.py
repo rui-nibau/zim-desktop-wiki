@@ -20,7 +20,7 @@ from zim.actions import action
 from zim.signals import SignalEmitter, ConnectorMixin, SIGNAL_RUN_LAST
 from zim.base.naturalsort import natural_sort_key
 from zim.config import String
-from zim.formats import ElementTreeModule as ElementTree, get_parser
+from zim.formats import ElementTreeModule as ElementTree
 from zim.formats import END, TEXT, \
 	TABLE, HEADROW, HEADDATA, TABLEROW, TABLEDATA, \
 	EMPHASIS, STRONG, MARK, VERBATIM, STRIKE, SUBSCRIPT, SUPERSCRIPT, LINK, ANCHOR, TAG
@@ -217,9 +217,7 @@ class TableViewObjectType(InsertedObjectTypeExtension):
 		return TableModel(attrib, headers, rows)
 
 	def model_from_data(self, notebook, page, attrib, data):
-		file_format = notebook.file_format
-		parser = get_parser(file_format)
-		tree = parser.parse(data)
+		tree = page.format.Parser().parse(data)
 		element = tree._etree.getroot().find('table') # XXX - should use token interface instead
 		if element is not None:
 			return self.model_from_element(element.attrib, element)

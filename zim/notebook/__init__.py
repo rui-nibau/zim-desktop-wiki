@@ -39,7 +39,7 @@ logger = logging.getLogger('notebook.zim')
 from zim.newfs import FileNotFoundError, localFileOrFolder, LocalFolder, FilePath
 from zim.parse.encode import url_decode
 from zim.templates import valid_template_name
-from zim.formats import get_format
+from zim.formats import get_format, valid_file_format
 
 from .info import NotebookInfo, NotebookInfoList, \
 	resolve_notebook, get_notebook_list, get_notebook_info, interwiki_link, create_valid_interwiki_key
@@ -49,7 +49,7 @@ from .operations import NotebookOperation, SimpleAsyncOperation, \
 
 from .notebook import Notebook, NotebookExtension, TrashNotSupportedError, \
 	PageNotFoundError, PageNotAllowedError, PageNotAvailableError, \
-	PageExistsError, valid_file_format, valid_file_extension
+	PageExistsError
 
 from .page import Path, Page, PageReadOnlyError, \
 	HRef, HREF_REL_ABSOLUTE, HREF_REL_FLOATING, HREF_REL_RELATIVE
@@ -191,7 +191,7 @@ class ApplicationMountPointHandler(object):
 			return path.exists()
 
 
-def init_notebook(dir, name=None, page_template='Default', file_format='zim-wiki', file_extension=None):
+def init_notebook(dir, name=None, page_template='Default', file_format='zim-wiki'):
 	'''Initialize a new notebook in a directory
 
 	@param dir: a L{Folder} for the notebook

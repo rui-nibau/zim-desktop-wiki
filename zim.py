@@ -106,12 +106,7 @@ def main():
 		# we are running in a bundle
 		installdir = sys._MEIPASS
 	else:
-		abspath = os.path.abspath(__file__)
-		if os.path.islink(abspath):
-			path = os.readlink(abspath)
-			installdir = os.path.dirname(os.path.join(os.path.dirname(abspath), path))
-		else:
-			installdir = os.path.dirname(os.path.abspath(__file__))
+		installdir = os.path.dirname(os.path.abspath(__file__))
 
 	# Run these functions before importing any application modules
 	init_environment(installdir)

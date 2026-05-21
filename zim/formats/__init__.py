@@ -240,6 +240,7 @@ def valid_file_format(file_format):
 		for n, l in list_formats(NATIVE_FORMAT):
 			if file_format == n:
 				return file_format
+	logger.warning('File format "%s" unknown, using default format "%s"', file_format, 'zim-wiki')
 	return 'zim-wiki'
 
 _aliases = {

@@ -253,7 +253,7 @@ class Notebook(ConnectorMixin, SignalEmitter):
 		if config['Notebook']['notebook_layout'] == 'files':
 			layout = FilesLayout(
 				folder,
-				default_format=_get_valid_format_from_config(config['Notebook']['default_file_format']),
+				default_format=zim.formats.valid_file_format(config['Notebook']['default_file_format']),
 				default_extension=config['Notebook']['default_file_extension'],
 				endofline=config['Notebook']['endofline']
 			)
@@ -1179,14 +1179,3 @@ class Notebook(ConnectorMixin, SignalEmitter):
 		template.process(lines, mycontext)
 		parser = self.layout.default_format.Parser()
 		return parser.parse(lines)
-
-def _get_valid_format_from_config(config_format):
-	'''returns a valid file format from config. Returns XXXX
-	@param config_format: L{str}
-	@returns: L{str}'''
-	valid_format = zim.formats.valid_file_format(config_format)
-	if valid_format != config_format:
-		logger.warning('Notebook file format "%s" unknown, using default format "%s"',
-			config_format, valid_format)
-		return valid_format
-	return config_format

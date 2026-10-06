@@ -458,9 +458,10 @@ class WikiParser(object):
 				text = text[:-delta]
 
 		if href is None:
-			builder.append(LINK, {'href': text}, text)
+			href = text.replace('(', '%28').replace(')', '%29')
+			builder.append(LINK, {'href': href}, text)
 		else:
-			builder.start(LINK, {'href': href})
+			builder.start(LINK, {'href': href.replace('(', '%28').replace(')', '%29')})
 			self.nested_inline_parser_below_link(builder, text)
 			builder.end(LINK)
 

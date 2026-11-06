@@ -41,6 +41,7 @@ from zim.actions import get_gtk_actiongroup, action, get_actions, \
 	ActionClassMethod, ToggleActionClassMethod, initialize_actiongroup
 from zim.plugins import PluginManager, ExtensionBase, extendable
 
+from zim.gui.base import schedule_on_idle
 from zim.gui.widgets import \
 	ErrorDialog, ScrolledWindow, populate_popup_add_separator, \
 	strip_boolean_result, widget_set_css
@@ -1140,6 +1141,9 @@ class PageView(GSignalEmitterMixin, Gtk.VBox):
 		return iter.get_offset()
 
 	def scroll_cursor_on_screen(self):
+		schedule_on_idle(self._scroll_cursor_on_screen)
+
+	def _scroll_cursor_on_screen(self):
 		buffer = self.textview.get_buffer()
 		self.textview.scroll_to_mark(buffer.get_insert(), SCROLL_TO_MARK_MARGIN, False, 0, 0)
 
@@ -1209,6 +1213,12 @@ class PageView(GSignalEmitterMixin, Gtk.VBox):
 		'''
 		if mark.get_name() != 'insert':
 			return
+
+		# Re-initalize the iter - apparently it is sometimes invalidated by
+		# other actions during handling of the signal.
+		# Specific during CJK (Japanese kanji) conversion leading to a Segfault
+		# on MacOs - see issue #3025
+		iter = buffer.get_iter_at_mark(mark)
 
 		# Set sensitivity of various menu options
 		if not self.readonly:
@@ -1332,7 +1342,7 @@ class PageView(GSignalEmitterMixin, Gtk.VBox):
 		buffer.place_cursor(iter)
 		if select_line:
 			buffer.select_line()
-		textview.scroll_to_mark(buffer.get_insert(), SCROLL_TO_MARK_MARGIN, False, 0, 0)
+		self.scroll_cursor_on_screen()
 
 	def do_populate_popup(self, menu):
 		buffer = self.textview.get_buffer()

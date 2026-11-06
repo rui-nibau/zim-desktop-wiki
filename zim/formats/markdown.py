@@ -19,11 +19,20 @@ from zim.parse.encode import escape_string, split_escaped_string, unescape_strin
 from zim.parse.regexparser import Rule, RegexParser
 from zim.parse.links import is_url_link, match_url_link, is_wiki_link, url_link_re, is_path_re
 
+from zim.config import ConfigDict
+
 from zim.formats import *
 from zim.formats.plain import Dumper as TextDumper
 
 
-MARKDOWN_FORMAT_VERSION = 'markdown 1.0'
+WIKI_FORMAT_VERSION = 'zim markdown 0.7'
+# Value for the 'Wiki-Format' header for markdown written by zim in a notebook page.
+# Any file where the 'Wiki-Format' header starts with "zim" shall be interpreted as a zim page.
+# The format and version number can be used to detect and handle changes in the syntax.
+#
+# History:
+# - 0.7 introduced after zim 0.77.2 initial release with version header
+
 
 info = {
 	'name': 'markdown',
@@ -40,10 +49,13 @@ info = {
 
 # ---- YAML front matter helpers ----
 
-_yaml_front_matter_re = re.compile(r'\A---[ \t]*\n(.*?\n)---[ \t]*\n\n?', re.DOTALL)
+_yaml_front_matter_re = re.compile(r'\A---[ \t]*\n(.*?\n)(\.\.\.|---)[ \t]*\n\n?', re.DOTALL)
+	# closing "---" instead of "..." is supported to be backward compatible with error in implementation
 _yaml_kv_re = re.compile(r'^([\w-]+):\s+(.*?)$', re.M)
 
+
 from zim.base import LastDefinedOrderedDict
+
 
 def parse_yaml_front_matter(text):
 	'''Parse YAML front matter delimited by --- lines.
@@ -55,26 +67,35 @@ def parse_yaml_front_matter(text):
 	if m:
 		yaml_block = m.group(1)
 		for kv in _yaml_kv_re.finditer(yaml_block):
-			meta[kv.group(1)] = kv.group(2).strip().strip('"').strip("'")
+			# Default decode as string - for now no other data types supported
+			k, v = kv.group(1), kv.group(2)
+			if v.startswith('"'):
+				v = v[1:-1].replace('\\"', '"').replace('\\\\', '\\')
+			elif v.startswith("'"):
+				v = v[1:-1].replace("''", "'")
+
+			meta[k] = v
 		text = text[m.end():]
 	return text, meta
 
 
-def dump_yaml_front_matter(meta):
+def dump_yaml_front_matter(headers):
 	'''Dump metadata as YAML front matter string.
 
-	@param meta: dict of key-value pairs
+	@param headers: dict or iterable of key-value pairs
 	@returns: string with YAML front matter block, or empty string if no meta
 	'''
-	if not meta:
+	if not headers:
 		return ''
+	elif hasattr(headers, 'items'):
+		headers = headers.items
+
 	lines = ['---\n']
-	for k, v in meta.items():
-		v = str(v).strip()
-		if ':' in v or '#' in v or "'" in v or '"' in v:
-			v = '"%s"' % v.replace('"', '\\"')
-		lines.append('%s: %s\n' % (k, v))
-	lines.append('---\n')
+	for k, v in headers:
+		# Default encode as double quoted string - for now no other data types supported
+		v = v.replace('\\', '\\\\').replace('"', '\\"')
+		lines.append('%s: "%s"\n' % (k, v))
+	lines.append('...\n')
 	return ''.join(lines)
 
 
@@ -94,11 +115,88 @@ md_empty_lines_re = re.compile(r'((?:^[ \t]*\n)+)', re.M | re.U)
 
 blockquote_line_re = re.compile(r'^((?:>[ \t]?)+)(.*\n?)')
 
-def _has_valid_href_parenthesis(href):
-	# Either ensure balanced pairs of unescaped ()
-	open = len(re.findall(r'(?<!\\)\(', href))
-	close = len(re.findall(r'(?<!\\)\)', href))
-	return open == close
+
+def _parse_link_href_and_title(href: str) -> tuple[bool, str, str, int]:
+	# Strip href string to get valid parenthesis and title
+	orig_href = href
+	if m := re.match('^<(.*?)>(\s+(.+))?$', href.strip()):
+		href = m.group(1)
+		if title := m.group(3):
+			valid, title = _match_link_title(title)
+			if valid:
+				return True, href, title, 0
+			else:
+				return False, '', '', len(orig_href)
+		else:
+			return True, href, title, 0
+	else:
+		string = href
+
+		parts = string.strip().split(maxsplit=1)
+		if len(parts) == 2:
+			href = parts[0]
+			valid, title = _match_link_title(parts[1])
+			valid = valid and _has_valid_href_parenthesis(href)
+		else:
+			href, title = string.strip(), ''
+			valid = _has_valid_href_parenthesis(href)
+
+		while not valid and ')' in string:
+			# find shorter string that is valid
+			i = string.rfind(')')
+			string = string[:i]
+
+			parts = string.strip().split(maxsplit=1)
+			if len(parts) == 2:
+				href = parts[0]
+				valid, title = _match_link_title(parts[1])
+				valid = valid and _has_valid_href_parenthesis(href)
+			else:
+				href, title = string.strip(), ''
+				valid = _has_valid_href_parenthesis(href)
+
+		if valid:
+				return True, href.replace('\\(', '(').replace('\\)', ')'), title, len(orig_href) - len(string)
+		else:
+			return False, '', '', len(orig_href)
+
+
+def _match_link_title(string: str) -> tuple[bool, str]:
+	# Can be enclosed in ".." '..' or (..) with enclosing character escaped
+	if len(string) < 2:
+		return False, ''
+	elif string[0] in ('"', "'"):
+		if string[-1] != string[0] \
+			or len(re.findall(r'(!<\\)%s' % string[0], string[1:-1])) > 0:
+				return False, ''
+		# else valid - pass
+	elif string[0] == '(':
+		if string[-1] != ')' \
+			or len(re.findall(r'(!<\\)[()]', string[1:-1])) > 0:
+				return False, ''
+		# else valid - pass
+	else:
+		return False, ''
+
+	title = re.sub('\\\\([\'"()])', lambda m: m.group(1), string[1:-1])
+	return True, title
+
+
+def _has_valid_href_parenthesis(href: str) -> bool:
+	# Check for balanced pairs of unescaped ()
+	open = 0
+	for p in re.findall(r'(?<!\\)[()]', href):
+		if p == '(':
+			open += 1
+		elif p == ')':
+			if open == 0:
+				return False
+			else:
+				open -= 1
+		else:
+			pass
+
+	return open == 0
 
 
 _md_autolink_url_pattern = r'[a-zA-Z][a-zA-Z0-9.+-]*:[^\s>]+'
@@ -107,6 +205,7 @@ _md_autolink_email_pattern = r'[a-zA-Z0-9.!#$%&\'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[
 md_autolink_url_re = re.compile(_md_autolink_url_pattern + '$')
 md_autolink_email_re = re.compile(_md_autolink_email_pattern + '$')
 
+md_code_span_pattern = r'(?<!`)(?P<code_ticks>`+)(?!`)(.+?)(?<!`)(?P=code_ticks)(?!`)'
 
 # ---- Markdown Parser ----
 
@@ -141,14 +240,14 @@ class MarkdownParser(object):
 		self.nested_inline_parser_below_link = (
 			Rule(TAG, r'(?<!\S)@\w+', process=self.parse_tag)
 			| Rule(EMPHASIS, r'\\\*', process=self._unescape_char)
+			| Rule(STRONG, r'(?<!\*)\*\*\*(?!\*)(.+?)(?<!\*)\*\*\*(?!\*)', process=self.parse_strong_emphasis)
 			| Rule(EMPHASIS, r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', descent=descent)
 			| Rule(STRONG, r'\*\*(?!\*)(.+?)\*\*', descent=descent)
 			| Rule(MARK, r'__(?!_)(.+?)__', descent=descent)
 			| Rule(SUBSCRIPT, r'(?<!~)~(?!~)(.+?)(?<!~)~(?!~)', descent=descent)
 			| Rule(SUPERSCRIPT, r'\^(?!\^)(.+?)\^', descent=descent)
 			| Rule(STRIKE, r'~~(?!~)(.+?)~~', descent=descent)
-			| Rule(VERBATIM, r'(?<!`)``(?!`)(.+?)(?<!`)``(?!`)')
-			| Rule(VERBATIM, r'(?<!`)`(?!`)(.+?)(?<!`)`(?!`)')
+			| Rule(VERBATIM, md_code_span_pattern, process=self.parse_code_span)
 		)
 
 		descent = lambda *a: self.inline_parser(*a)
@@ -157,19 +256,19 @@ class MarkdownParser(object):
 			| Rule(LINK, r'<(%s)>' % _md_autolink_email_pattern, process=self.parse_autolink) # email autolink
 			| Rule(LINK, url_link_re, process=self.parse_url)
 			| Rule(LINK, r'\[\[(?!\[)(.*?\]*)\]\]', process=self.parse_wiki_link)
-			| Rule(IMAGE,   r'!\[([^\]]*)\]\((\S+)\)(\{[^}]*\})?', process=self.parse_image)
-			| Rule(LINK, r'\[([^\]]*)\]\((\S+)\)', process=self.parse_link)
+			| Rule(IMAGE,   r'!\[([^\]]*)\]\((.*)\)(\{[^}]*\})?', process=self.parse_image)
+			| Rule(LINK, r'\[([^\]]*)\]\((.*)\)', process=self.parse_link)
 			| Rule(ANCHOR, r'\{\#(\w[\w-]*)\}', process=self.parse_anchor)
 			| Rule(TAG, r'(?<!\S)@\w+', process=self.parse_tag)
 			| Rule(EMPHASIS, r'\\\*', process=self._unescape_char)
+			| Rule(STRONG, r'(?<!\*)\*\*\*(?!\*)(.+?)(?<!\*)\*\*\*(?!\*)', process=self.parse_strong_emphasis)
 			| Rule(EMPHASIS, r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', descent=descent)
 			| Rule(STRONG, r'\*\*(?!\*)(.+?)\*\*', descent=descent)
 			| Rule(MARK, r'__(?!_)(.+?)__', descent=descent)
 			| Rule(SUBSCRIPT, r'(?<!~)~(?!~)(.+?)(?<!~)~(?!~)', descent=descent)
 			| Rule(SUPERSCRIPT, r'\^(?!\^)(.+?)\^', descent=descent)
 			| Rule(STRIKE, r'~~(?!~)(.+?)~~', descent=descent)
-			| Rule(VERBATIM, r'(?<!`)``(?!`)(.+?)(?<!`)``(?!`)')
-			| Rule(VERBATIM, r'(?<!`)`(?!`)(.+?)(?<!`)`(?!`)')
+			| Rule(VERBATIM, md_code_span_pattern, process=self.parse_code_span)
 		)
 
 	def _init_intermediate_parser(self):
@@ -231,6 +330,19 @@ class MarkdownParser(object):
 	@staticmethod
 	def _unescape_char(builder, text):
 		builder.text(text[1:]) # strip leading "\"
+
+	def parse_strong_emphasis(self, builder, text):
+		builder.start(STRONG)
+		builder.start(EMPHASIS)
+		self.nested_inline_parser_below_link(builder, text)
+		builder.end(EMPHASIS)
+		builder.end(STRONG)
+
+	def parse_code_span(self, builder, ticks, text):
+		# Strip one padding space at either end, except for all-space content.
+		if text.startswith(' ') and text.endswith(' ') and text.strip(' '):
+			text = text[1:-1]
+		builder.append(VERBATIM, {}, text)
 
 	# --- Block-level handlers ---
 
@@ -322,6 +434,17 @@ class MarkdownParser(object):
 							attrib['class'] = cls
 					else:
 						attrib['type'] = cls
+
+		if attrib.get('type') == 'code':
+			# special case for pandoc compatibility "numberLines" and "number-lines" class
+			classes = attrib.get('class', '').split()
+			if 'numberLines' in classes or 'number-lines' in classes:
+				attrib['linenumbers'] = True
+				classes = [c for c in classes if c not in ('numberLines', 'number-lines')]
+				if classes:
+					attrib['class'] = ' '.join(classes)
+				else:
+					attrib.pop('class')
 
 		return attrib
 
@@ -528,39 +651,37 @@ class MarkdownParser(object):
 
 	def parse_link(self, builder, text, href):
 		'''Parse [text](href) links'''
-		if '(' in href or ')' in href:
-			orig_href = href
-			while ')' in href and not _has_valid_href_parenthesis(href):
-				i = href.rfind(')')
-				href = href[:i]
+		valid, href, title, delta = _parse_link_href_and_title(href)
+		if not valid:
+			builder.text('[')
+			self.inline_parser.backup_parser_offset(delta + len(text) + len(']()'))
+			return
+		elif delta > 0:
+			self.inline_parser.backup_parser_offset(delta)
 
-			if not _has_valid_href_parenthesis(href):
-				builder.text('[')
-				self.inline_parser.backup_parser_offset(len(orig_href) + len(text) + len(']()'))
-				return
-			else:
-				self.inline_parser.backup_parser_offset(len(orig_href) - len(href))
-
-			href = href.replace('\\(', '(').replace('\\)', ')')
-
-		href = href.strip()
+		attrib = {'href': href, 'title': title} if title else {'href': href}
 		text = text.strip()
-
 		if text and text != href:
-			builder.start(LINK, {'href': href})
+			builder.start(LINK, attrib)
 			self.nested_inline_parser_below_link(builder, text)
 			builder.end(LINK)
 		else:
-			builder.append(LINK, {'href': href}, text or href)
+			builder.append(LINK, attrib, text or href)
 
-	def parse_image(self, builder, alt, src, props_str=None, href=None):
+	def parse_image(self, builder, alt, src, props_str=None):
 		'''Parse ![alt](src){props} images'''
-		attrib = {'src': src.strip()}
+		valid, src, title, delta = _parse_link_href_and_title(src)
+		if not valid:
+			builder.text('![')
+			self.inline_parser.backup_parser_offset(delta + len(alt) + len(']()') + len(props_str or ''))
+			return
+		elif delta > 0:
+			self.inline_parser.backup_parser_offset(delta + len(props_str or ''))
+			props_str = None # after invalid parenthesis, so not parsed here
 
+		attrib = {'src': src.strip(), 'title': title} if title else {'src': src.strip()}
 		if alt:
 			attrib['alt'] = alt
-
-		href = href.strip() if href else None
 
 		# Parse Pandoc-style properties: {#id width=500px height=20px}
 		if props_str:
@@ -635,6 +756,9 @@ class Parser(ParserClass):
 		if file_input:
 			input, meta = parse_yaml_front_matter(input)
 
+		version = meta.pop('Wiki-Format', WIKI_FORMAT_VERSION) if meta else WIKI_FORMAT_VERSION
+			# pop header that is only interesting for the parser
+
 		builder = ParseTreeBuilder()
 		markdownparser(builder, input)
 
@@ -675,7 +799,6 @@ class Dumper(TextDumper):
 		STRONG: ('**', '**'),
 		MARK: ('__', '__'),
 		STRIKE: ('~~', '~~'),
-		VERBATIM: ('`', '`'),
 		TAG: ('', ''),  # @tag rendered as-is
 		SUBSCRIPT: ('~', '~'),
 		SUPERSCRIPT: ('^', '^'),
@@ -693,15 +816,19 @@ class Dumper(TextDumper):
 		if file_output:
 			# Dump with YAML front matter, assuming native mode
 			self.set_native(True) # just to be sure
-			header_meta = {}
+			headers = [('Wiki-Format', WIKI_FORMAT_VERSION)]
 			if hasattr(tree, 'meta') and tree.meta:
-				header_meta.update(tree.meta)
+				for k, v in tree.meta.items():
+					if k != 'Wiki-Format':
+						headers.append((k, v))
+
+			head = dump_yaml_front_matter(headers)
 
 			body = TextDumper.dump(self, tree)
 			if body and not body[-1].endswith('\n'):
 				body[-1] = body[-1] + '\n'
-			head = dump_yaml_front_matter(header_meta)
-			return [head, '\n'] + body if head else body
+
+			return [head, '\n'] + body
 		else:
 			return TextDumper.dump(self, tree)
 
@@ -720,6 +847,16 @@ class Dumper(TextDumper):
 
 	dump_p = dump_indent
 	dump_div = dump_indent
+
+	def dump_code(self, tag, attrib, strings):
+		text = ''.join(strings)
+		if not text:
+			return []
+		ticks = '`' * (max((len(run) for run in re.findall(r'`+', text)), default=0) + 1)
+		if text.startswith('`') or text.endswith('`') \
+			or (text.startswith(' ') and text.endswith(' ') and text.strip(' ')):
+				text = ' ' + text + ' '
+		return [ticks, text, ticks]
 
 	def dump_list(self, tag, attrib, strings):
 		if 'indent' in attrib:
@@ -770,9 +907,10 @@ class Dumper(TextDumper):
 		# find sequence for fenced code block that does not occur inside the code block
 		char = fence[0]
 		count = 0
-		for string in strings:
+		for string in ''.join(strings).splitlines():
+			string = string.lstrip(' \t')
 			if string.startswith(char):
-				count = len(string) - len(string.lstrip(char))
+				count = max(count, len(string) - len(string.lstrip(char)))
 
 		if count >= len(fence):
 			return char * (count + 3)
@@ -785,6 +923,15 @@ class Dumper(TextDumper):
 			# Special case for syntax highlighting
 			lang = ' ' + encode_xml_attrib(attrib['lang'])
 			skip = skip + ('lang', 'type')
+
+			# special case for pandoc compatibility
+			attrib = dict(attrib.all_items()) if isinstance(attrib, ConfigDict) else attrib.copy()
+			classes = attrib.get('class', '').split()
+			classes = [c for c in classes if c not in ('numberLines', 'number-lines')]
+			if attrib.get('linenumbers'):
+				classes.append('numberLines')
+			attrib['class'] = ' '.join(classes) if classes else None
+			skip = skip + ('linenumbers',)
 
 		parts = []
 		if attrib.get('id') and not 'id' in skip:
@@ -831,13 +978,13 @@ class Dumper(TextDumper):
 
 		if self.linker:
 			# Export mode: resolve links through linker and export as standard markdown
+			text = '' if text == href else text # check before linker changes href
 			href = self.linker.link(href)
-			text = text or href
 		elif is_wiki_link(href):
 			# Wiki link that cannot be resolved by other applications --> wiki link extension
-			return ('[[', href, '|', text, ']]') if text and text != href else ('[[', href, ']]')
+			return ('[[', href, '|', text, ']]') if (text and href) and text != href else ('[[', (href or text), ']]')
 
-		if href == text:
+		if not text or text == href:
 			if self.native and is_url_link(href): # autolink extension undecorated urls
 				return (href,)
 			elif md_autolink_url_re.match(href) or md_autolink_email_re.match(href): # regular autolink
@@ -845,27 +992,33 @@ class Dumper(TextDumper):
 			else:
 				text = ''
 
-		if not _has_valid_href_parenthesis(href):
+		if ' ' in href:
+			href = '<' + href + '>'
+		elif not _has_valid_href_parenthesis(href):
 			href = href.replace('(', '\\(').replace(')', '\\)')
 
-		return ['[%s](%s)' % (text, href)]
+		if 'title' in attrib:
+			title = attrib['title'].replace('"', '\\"')
+			return ['[%s](%s "%s")' % (text, href, title)]
+		else:
+			return ['[%s](%s)' % (text, href)]
 
 	def dump_img(self, tag, attrib, strings=None):
-		if self.linker:
-			src = self.linker.img(attrib['src'])
-		else:
-			src = attrib.get('src', '')
-
+		src = attrib.get('src', '')
 		text = attrib.get('alt', '')
+
+		if self.linker:
+			# Export mode: resolve links through linker and export as standard markdown
+			text = '' if text == src else text # check before linker changes src
+			src = self.linker.img(src)
 
 		# Pandoc-style dimensions: ![alt](src){width=500px height=20px}
 		opts = []
-		if 'id' in attrib:
-			opts.append('#' + attrib['id'])
+		if myid := attrib.get('id'):
+			opts.append('#' + str(myid))
 
-		items = sorted(attrib.items())
-		for k, v in items:
-			if k in ('src', 'alt', 'id') or k.startswith('_'):
+		for k, v in sorted(attrib.items()):
+			if k in ('src', 'alt', 'id', 'title') or k.startswith('_'):
 				continue
 			elif v: # skip None, "" and 0
 				if k in ('width', 'height'):
@@ -880,7 +1033,17 @@ class Dumper(TextDumper):
 					opts.append('%s="%s"' % (k, data))
 
 		props = '{%s}' % (' '.join(opts)) if len(opts) > 0 else ''
-		return ['![%s](%s)%s' % (text, src, props)]
+
+		if ' ' in src:
+			src = '<' + src + '>'
+		elif not _has_valid_href_parenthesis(src):
+			src = src.replace('(', '\\(').replace(')', '\\)')
+
+		if title := attrib.get('title'):
+			title = str(title).replace('"', '\\"')
+			return ['![%s](%s "%s")%s' % (text, src, title, props)]
+		else:
+			return ['![%s](%s)%s' % (text, src, props)]
 
 	dump_object_fallback = dump_pre
 

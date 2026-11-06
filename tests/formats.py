@@ -92,9 +92,8 @@ class TestFormatMixin(object):
 		# Parser
 		if not hasattr(self.format, 'Parser'):
 			return
-		input = wanted
 		parser = self.format.Parser()
-		result = parser.parse(input)
+		result = parser.parse(wanted)
 		if self.format.info['native']:
 			my_reference_xml = self.hackRoundtripReference(self.reference_xml)
 			self.assertMultiLineEqual(result.tostring(filter_private_attrib=True), my_reference_xml)
@@ -1085,6 +1084,7 @@ class TestMarkdownNativeFormat(tests.TestCase, TestFormatMixin):
 			('~~~ {code lang="python"}\ndef hello():\n    pass\n~~~', OBJECT, '~~~ python\ndef hello():\n    pass\n~~~'),
 			('~~~ {code lang="python" id=myId}\ndef hello():\n    pass\n~~~', OBJECT, '~~~ python {#myId}\ndef hello():\n    pass\n~~~'),
 			('~~~ {code: lang="python"}\ndef hello():\n    pass\n~~~', OBJECT, '~~~ python\ndef hello():\n    pass\n~~~'),
+			('~~~ python\n~~~\n', OBJECT, ''), # emptty block
 		):
 			output = output.strip() or input.strip()
 			parser = self.format.Parser()
@@ -1122,8 +1122,29 @@ class TestMarkdownNativeFormat(tests.TestCase, TestFormatMixin):
 			("foo\n```sdfsd```\n", "```", "``````"),
 			("foo\n`sdfsd`\n", "```", "```"),
 			("foo\n```sdfsd```\n", "~~~", "~~~"),
+			("``````\n```\n", "```", "`````````"),
+			("foo\n  ```\n", "```", "``````"),
 		):
-			self.assertEqual(dumper._find_fence(code.splitlines(True), fence), result)
+			for strings in ([code], code.splitlines(True)):
+				with self.subTest(code=code, strings=strings):
+					self.assertEqual(dumper._find_fence(strings, fence), result)
+
+	def testFencedCodeContentRoundTrip(self):
+		for fence in ('```', '~~~'):
+			for code in (
+				'example\n',
+				'example\n' + fence + '\ntail\n',
+				fence * 2 + '\nexample\n' + fence + '\ntail\n',
+				'example\n  ' + fence + '\ntail\n',
+			):
+				with self.subTest(fence=fence, code=code):
+					tree = ParseTree().fromstring('<zim-tree><pre _fence="%s">%s</pre></zim-tree>' % (fence, code))
+					output = ''.join(self.format.Dumper().dump(tree))
+					roundtrip = self.format.Parser().parse(output)
+					blocks = list(roundtrip.iter_elements(VERBATIM_BLOCK))
+					self.assertEqual(len(blocks), 1)
+					self.assertEqual(tokens_to_text(blocks[0].content), code)
+					self.assertFalse(list(roundtrip.iter_elements(PARAGRAPH)))
 
 	def testObjects(self):
 		# Test dumping and parsing of objects
@@ -1141,6 +1162,35 @@ class TestMarkdownNativeFormat(tests.TestCase, TestFormatMixin):
 		self.assertIn('<h level="1">Heading 1\n</h>', xml)
 		self.assertIn('<h level="2">Heading 2\n</h>', xml)
 		self.assertIn('<h level="3">Heading 3\n</h>', xml)
+
+	def testParseTripleAsteriskStrongEmphasis(self):
+		markdown = 'An ***example***\n'
+		parser = self.format.Parser()
+		tree = parser.parse(markdown)
+		xml = tree.tostring()
+		self.assertIn('<strong><emphasis>example</emphasis></strong>', xml)
+		output = ''.join(self.format.Dumper().dump(tree))
+		self.assertEqual(output, markdown)
+		self.assertEqual(parser.parse(output).tostring(), xml)
+
+	def testInlineCodeBackticks(self):
+		for markdown, code in (
+			('`code`', 'code'),
+			('``a`b``', 'a`b'),
+			('```a``b```', 'a``b'),
+			('`` `code` ``', '`code`'),
+			('`` ` ``', '`'),
+			('`  code  `', ' code '),
+			('`   `', '   '),
+		):
+			with self.subTest(markdown=markdown):
+				self.assertParseAndDumpEquals(markdown + '\n', '<p><code>%s</code>\n</p>' % code)
+
+	def testInlineCodeBackticksInLink(self):
+		self.assertParseAndDumpEquals(
+			'[``a`b``](https://example.org)\n',
+			'<p><link href="https://example.org"><code>a`b</code></link>\n</p>'
+		)
 
 	def testParseFormatting(self):
 		input = '**bold** *italic* ~~strike~~ `code` __mark__ ~sub~ ^sup^\n'
@@ -1257,20 +1307,22 @@ class TestMarkdownNativeFormat(tests.TestCase, TestFormatMixin):
 		self.assertIn('[x]', result)
 
 	def testYAMLFrontMatter(self):
+		from zim.formats.markdown import WIKI_FORMAT_VERSION
 		input = (
 			'---\n'
-			'Creation-Date: 2024-01-01\n'
-			'Content-Type: text/markdown\n'
-			'Format: markdown 1.0\n'
-			'---\n'
+			'Wiki-Format: "%s"\n'
+			'Creation-Date: "2024-01-01"\n'
+			'Custom-Header: "test123"\n'
+			'...\n'
 			'\n'
 			'# Hello\n'
 			'\n'
-			'World\n'
+			'World\n' % WIKI_FORMAT_VERSION
 		)
 		parser = self.format.Parser()
 		tree = parser.parse(input, file_input=True)
 		self.assertEqual(tree.meta.get('Creation-Date'), '2024-01-01')
+		self.assertNotIn('Wiki-Format', tree.meta) # to be used by parser and kept internal
 
 		# Dump back with file_output
 		dumper = self.format.Dumper()
@@ -1380,20 +1432,32 @@ dus ja
 			('[](./foo(part1).pdf)', '<p><link href="./foo(part1).pdf">./foo(part1).pdf</link></p>'), # balanced pair of ()
 			('[](./foo(part1).pdf)foo', '<p><link href="./foo(part1).pdf">./foo(part1).pdf</link>foo</p>'),
 			('[](./foo(part1).pdf) and (this)', '<p><link href="./foo(part1).pdf">./foo(part1).pdf</link> and (this)</p>'), # balanced pair of ()
+			('[](./foo-part1).pdf) and (this)', '<p><link href="./foo-part1">./foo-part1</link>.pdf) and (this)</p>'), # unbalanced pair of ()
 			('[](./foo\\(part1.pdf)', '<p><link href="./foo(part1.pdf">./foo(part1.pdf</link></p>'), # escaped (
+			('[](foo((bar)', '<p>[](foo((bar)</p>'), # invalid parenthesis
 			('[](./foo%20part1.pdf)', '<p><link href="./foo%20part1.pdf">./foo%20part1.pdf</link></p>'),
 			('http://example.com', '<p><link href="http://example.com">http://example.com</link></p>'),
 			('[[Page]]', '<p><link href="Page">Page</link></p>'),
 			('[[Other Page|display]]', '<p><link href="Other Page">display</link></p>'),
+			('[](./my%20file.pdf)', '<p><link href="./my%20file.pdf">./my%20file.pdf</link></p>'),
+			('[](<./my file.pdf>)', '<p><link href="./my file.pdf">./my file.pdf</link></p>'),
+			('[](<./my file.pdf> "my title")', '<p><link href="./my file.pdf" title="my title">./my file.pdf</link></p>'),
+			('[](<./my file.pdf> my title)', '<p>[](&lt;./my file.pdf&gt; my title)</p>'), # invalid
+			('[](./myfile.pdf "my ( title")', '<p><link href="./myfile.pdf" title="my ( title">./myfile.pdf</link></p>'),
 		):
 			self.assertParseAndDumpEquals(markdown, xml)
 
-		for markdown, xml in (
+		for markdown, xml, result in (
 			# Some test cases that should parse, but dump differently
-			('[Page](Page)', '<p><link href="Page">Page</link></p>'),
-			('[display](Other%20Page)', '<p><link href="Other%20Page">display</link></p>'),
+			('[Page](Page)', '<p><link href="Page">Page</link></p>', '[[Page]]'),
+			('[display](OtherPage)', '<p><link href="OtherPage">display</link></p>', '[[OtherPage|display]]'),
+			('[some text]()', '<p><link href="">some text</link></p>', '[[some text]]'),
+			('[]()', '<p><link href="" /></p>', '[[]]'), # empty link - valid markdown, not usefull in zim
+			('[](./myfile.pdf \'my title\')', '<p><link href="./myfile.pdf" title="my title">./myfile.pdf</link></p>', '[](./myfile.pdf "my title")'),
+			('[](./myfile.pdf (my title))', '<p><link href="./myfile.pdf" title="my title">./myfile.pdf</link></p>', '[](./myfile.pdf "my title")'),
 		):
 			self.assertParseEquals(markdown, xml)
+			self.assertDumpEquals(xml, result)
 
 	def testImages(self):
 		for markdown, xml in (
@@ -1401,12 +1465,28 @@ dus ja
 			('![](./image.png){width=500px}', '<p><img src="./image.png" width="500" /></p>'),
 			('![](./image.png){#myid width=500px}', '<p><img id="myid" src="./image.png" width="500" /></p>'),
 			('![](./image.png)', '<p><img src="./image.png" /></p>'),
+			('![alt text](./image.png)', '<p><img alt="alt text" src="./image.png" /></p>'),
+			('![alt text]()', '<p><img alt="alt text" src="" /></p>'),
+			('![]()', '<p><img src="" /></p>'), # empty image - valid markdown, not usefull in zim
+			('![](foo((bar)', '<p>![](foo((bar)</p>'), # invalid parenthesis
 			('![](./image.png){href=Page}', '<p><img href="Page" src="./image.png" /></p>'),
 			('![](./image.png){href="Page Foo %quot;Bar%quot;"}', '<p><img href="Page Foo %quot;Bar%quot;" src="./image.png" /></p>'),
 			('![](./file(1).pdf)', '<p><img src="./file(1).pdf" /></p>'),
 			('![](./file(1).pdf)foo', '<p><img src="./file(1).pdf" />foo</p>'),
+			('![](./foo(part1).pdf) and (this)', '<p><img src="./foo(part1).pdf" /> and (this)</p>'), # balanced pair of ()
+			('![](./foo-part1).pdf) and (this)', '<p><img src="./foo-part1" />.pdf) and (this)</p>'), # unbalanced pair of ()
+			('![](./foo\\(part1.pdf)', '<p><img src="./foo(part1.pdf" /></p>'), # escaped (
+			('![](./my%20image.png)', '<p><img src="./my%20image.png" /></p>'),
+			('![](<./my image.png>)', '<p><img src="./my image.png" /></p>'),
+			('![](<./my image.png> "my title")', '<p><img src="./my image.png" title="my title" /></p>'),
+			('![](<./my image.png> my title)', '<p>![](&lt;./my image.png&gt; my title)</p>'), # invalid
 		):
 			self.assertParseAndDumpEquals(markdown, xml)
+
+		#for markdown, xml in (
+			# Some test cases that should parse, but dump differently
+		#):
+		#	self.assertParseEquals(markdown, xml)
 
 
 class TestRstFormat(tests.TestCase, TestFormatMixin):

@@ -26,7 +26,8 @@ from zim.formats import END, TEXT, \
 	EMPHASIS, STRONG, MARK, VERBATIM, STRIKE, SUBSCRIPT, SUPERSCRIPT, LINK, ANCHOR, TAG
 
 from zim.gui.pageview import PageViewExtension
-from zim.gui.widgets import Dialog, ScrolledWindow, IconButton, InputEntry, gtk_popup_at_pointer
+from zim.gui.widgets import Dialog, ScrolledWindow, IconButton, InputEntry, gtk_popup_at_pointer, \
+	encode_markup_text
 from zim.gui.insertedobjects import InsertedObjectWidget
 
 
@@ -42,6 +43,8 @@ SYNTAX_WIKI_PANGO2 = [
 	(r'<mark>\1</mark>', r'<span background="yellow">\1</span>', r'__\1__'),
 	(r'<code>\1</code>', r'<tt>\1</tt>', r"``\1``"),
 	(r'<strike>\1</strike>', r'<s>\1</s>', r'~~\1~~'),
+	(r'<sup>\1</sup>', r'<sup>\1</sup>', r'^{\1}'),
+	(r'<sub>\1</sub>', r'<sub>\1</sub>', r'_{\1}'),
 	# Link url without link text  - Link url has always size = 1 to stay hidden FIXME: hacky
 	(r'<link href="\1">\1</link>', r'<span foreground="blue"><span size="1">\1</span>\1</span>', r'[\1](\1)'),
 	# Link url with link text  - Link url has always size = 1 to stay hidden FIXME: hacky
@@ -63,6 +66,7 @@ def reg_replace(string):
 	:return:source pattern
 	'''
 	string = string.replace('*', r'\*').replace('[', r'\[').replace(']', r'\]') \
+		.replace('^', r'\^').replace('{', r'\{').replace('}', r'\}') \
 		.replace(r'\1', '(.+?)', 1).replace(r'\2', '(.+?)', 1).replace('|', r'\|')
 	return re.compile(string)
 
@@ -91,10 +95,10 @@ def tokens_to_pango_markup(tokens):
 	text = []
 	for t in tokens:
 		if t[0] == TEXT:
-			text.append(t[1])
+			text.append(encode_markup_text(t[1]))
 		elif t[0] == LINK:
 			# Special handling of href, url has size = 1 to stay hidden FIXME: hacky
-			text.append('<span foreground="blue"><span size="1">%s</span>' % t[1]['href'])
+			text.append('<span foreground="blue"><span size="1">%s</span>' % encode_markup_text(t[1]['href']))
 		elif t[0] in _pango_for_token:
 			text.append(_pango_for_token[t[0]][0])
 		elif t[0] == END and t[1] in _pango_for_token:
@@ -276,7 +280,8 @@ class TableViewObjectType(InsertedObjectTypeExtension):
 				assert current_row, 'Malformed tokens, %r outside of table cell' % t
 				current_row[-1].append(t)
 
-		headers = [tokens_to_pango_markup(h) for h in headers]
+		# Headers are kept as plain text, only cells are converted to markup
+		headers = [''.join(t[1] for t in h if t[0] == TEXT) for h in headers]
 		rows = [[tokens_to_pango_markup(c) for c in row] for row in rows]
 		return TableModel(attrib, headers, rows)
 
@@ -622,7 +627,8 @@ class TableViewWidget(InsertedObjectWidget):
 		col_widget.show()
 
 
-		col_label = Gtk.Label(label='<u>' + title + '</u>')
+		# Headers are plain text, escape them before using them in markup
+		col_label = Gtk.Label(label='<u>' + encode_markup_text(title) + '</u>')
 		col_label.set_use_markup(True)
 		col_label.show()
 		col_widget.pack_start(col_label, True, True, 0)

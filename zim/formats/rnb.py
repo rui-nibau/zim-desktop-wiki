@@ -29,7 +29,7 @@ info = {
 	'desc': 'RNB format (markdown)',
 	'mimetype': 'text/x-zim-rnb',
 	'extension': 'md',
-	'extensions': ('md',),
+	'extensions': ('md', 'markdown'),
 	'native': True,
 	'import': True,
 	'export': True,
@@ -74,6 +74,7 @@ class WikiParser(object):
 	BULLETS = {
 		'[ ]': UNCHECKED_BOX,
 		'[x]': XCHECKED_BOX,
+		'[X]': XCHECKED_BOX,
 		'[*]': CHECKED_BOX,
 		'[>]': MIGRATED_BOX,
 		'[<]': TRANSMIGRATED_BOX,
@@ -328,22 +329,23 @@ class WikiParser(object):
 			wraps.append(0)
 
 		attrib = {'aligns': ','.join(aligns), 'wraps': ','.join(map(str, wraps))}
+		if self.blockquote_indent:
+			attrib['indent'] = self.blockquote_indent
 		builder.start(TABLE, attrib)
 
 		builder.start(HEADROW)
 		for celltext in headers:
-			celltext = unescape_string(celltext.strip()) or ' ' # must contain at least one character
+			celltext = unescape_string(celltext.strip()) or ' '
 			builder.append(HEADDATA, {}, celltext)
 		builder.end(HEADROW)
 
 		for bodyrow in rows:
 			while len(bodyrow) < n_cols:
 				bodyrow.append('')
-
 			builder.start(TABLEROW)
 			for celltext in bodyrow:
 				builder.start(TABLEDATA)
-				celltext = unescape_string(celltext.strip()) or ' ' # must contain at least one character
+				celltext = unescape_string(celltext.strip()) or ' '
 				self.inline_parser(builder, celltext)
 				builder.end(TABLEDATA)
 			builder.end(TABLEROW)

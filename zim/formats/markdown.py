@@ -753,11 +753,12 @@ class Parser(ParserClass):
 		input = fix_unicode_whitespace(input)
 
 		meta = None
-		if file_input:
-			input, meta = parse_yaml_front_matter(input)
+		# XXX Disable frontmatter as metas for now to be able to edit them
+		# if file_input:
+		# 	input, meta = parse_yaml_front_matter(input)
 
-		version = meta.pop('Wiki-Format', WIKI_FORMAT_VERSION) if meta else WIKI_FORMAT_VERSION
-			# pop header that is only interesting for the parser
+		# version = meta.pop('Wiki-Format', WIKI_FORMAT_VERSION) if meta else WIKI_FORMAT_VERSION
+		# 	# pop header that is only interesting for the parser
 
 		builder = ParseTreeBuilder()
 		markdownparser(builder, input)
@@ -814,21 +815,23 @@ class Dumper(TextDumper):
 
 	def dump(self, tree, file_output=False):
 		if file_output:
-			# Dump with YAML front matter, assuming native mode
-			self.set_native(True) # just to be sure
-			headers = [('Wiki-Format', WIKI_FORMAT_VERSION)]
-			if hasattr(tree, 'meta') and tree.meta:
-				for k, v in tree.meta.items():
-					if k != 'Wiki-Format':
-						headers.append((k, v))
+			# XXX Disable frontmatter as metas for now to be able to edit them
+			# # Dump with YAML front matter, assuming native mode
+			# self.set_native(True) # just to be sure
+			# headers = [('Wiki-Format', WIKI_FORMAT_VERSION)]
+			# if hasattr(tree, 'meta') and tree.meta:
+			# 	for k, v in tree.meta.items():
+			# 		if k != 'Wiki-Format':
+			# 			headers.append((k, v))
 
-			head = dump_yaml_front_matter(headers)
+			# head = dump_yaml_front_matter(headers)
 
 			body = TextDumper.dump(self, tree)
 			if body and not body[-1].endswith('\n'):
 				body[-1] = body[-1] + '\n'
 
-			return [head, '\n'] + body
+			return body
+			# return [head, '\n'] + body
 		else:
 			return TextDumper.dump(self, tree)
 

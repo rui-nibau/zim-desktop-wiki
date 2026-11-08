@@ -317,7 +317,7 @@ class MarkdownParser(object):
 				process=self.parse_table
 			),
 			# Horizontal rule
-			Rule(LINE, r'^[ \t]*(?:[-*_][ \t]*){3,}$\n?', process=self.parse_line),
+			Rule(LINE, r'^[ \t]*(?:[-*_][ \t]*){5,}$\n?', process=self.parse_line),
 			# Blockquote
 			Rule('X-Blockquote',
 				r'((?:^>[ \t]?.*$\n?)+)',						# Lines with > prefix
@@ -1072,4 +1072,4 @@ class Dumper(TextDumper):
 	dump_th = dump_td
 
 	def dump_line(self, tag, attrib, strings=None):
-		return '---\n'
+		return '-----\n'

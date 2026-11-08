@@ -142,11 +142,13 @@ class FilesLayout(NotebookLayout):
 					return True # give file the benefit of the doubt, could be a deleted source file
 			elif self.supported_extensions[ext].info['mimetype'] == 'text/markdown':
 				# To avoid reading (and converting) all markdown files, check for zim specific header
-				try:
-					text = file.read(size=60) # max size to allow for some trailing whitespace and end-of-line
-					return bool(_markdown_start_re.match(text))
-				except FileNotFoundError:
-					return True # give file the benefit of the doubt, could be a deleted source file
+				# XXX We assume all files with md extension to be notebook files for now
+				return True
+				# try:
+				# 	text = file.read(size=60) # max size to allow for some trailing whitespace and end-of-line
+				# 	return bool(_markdown_start_re.match(text))
+				# except FileNotFoundError:
+				# 	return True # give file the benefit of the doubt, could be a deleted source file
 			else:
 				# Other source formats are accepted based on file extension only
 				return True

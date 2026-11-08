@@ -94,8 +94,8 @@ def dump_yaml_front_matter(headers):
 	for k, v in headers:
 		# Default encode as double quoted string - for now no other data types supported
 		v = v.replace('\\', '\\\\').replace('"', '\\"')
-		lines.append('%s: "%s"\n' % (k, v))
-	lines.append('...\n')
+		lines.append('%s: %s\n' % (k, v))
+	lines.append('---\n')
 	return ''.join(lines)
 
 

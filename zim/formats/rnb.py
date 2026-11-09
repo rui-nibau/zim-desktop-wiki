@@ -514,9 +514,6 @@ class Parser(ParserClass):
 		input = input.replace('\u2029', ' ') # Unicode PARAGRAPH SEPARATOR
 		input = fix_unicode_whitespace(input)
 
-		logger.debug('=======rnb.parse')
-		logger.debug(input)
-
 		meta = None
 		if file_input:
 			input, meta = parse_frontmatter(input)
@@ -557,7 +554,6 @@ def parse_frontmatter(text):
 	@returns: tuple of (body_text, meta_dict)
 	'''
 	assert isinstance(text, str)
-	logger.debug(text)
 	meta = LastDefinedOrderedDict()
 	m = _yaml_front_matter_re.match(text)
 	if m:
@@ -567,7 +563,6 @@ def parse_frontmatter(text):
 			meta[k] = v.strip()
 		# XXX Keep frontmatter in body to be able to edit metas
 		# text = text[m.end():]
-	logger.debug(text)
 	return text, meta
 
 def dump_frontmatter(headers):

@@ -15,19 +15,12 @@ from zim.formats import *
 from zim.formats.plain import Dumper as TextDumper
 from zim.parse.encode import escape_string, split_escaped_string, unescape_string, url_encode, URL_ENCODE_DATA
 
-WIKI_FORMAT_VERSION = 'zim 0.6'
-assert WIKI_FORMAT_VERSION != 'zim 0.26' # skip number for historic reasons
-# History:
-# - 0.6  new url parsing logic
-# - 0.5  support nested formatting
-# - 0.4  parser rewrite, specifically changed parsing indented blocks
-# - 0.26 oldest format supported in python branch
-
+WIKI_FORMAT_VERSION = 'rnb 0.1'
 
 info = {
 	'name': 'rnb',
 	'desc': 'RNB format (markdown)',
-	'mimetype': 'text/x-zim-rnb',
+	'mimetype': 'text/rnb',
 	'extension': 'md',
 	'extensions': ('md', 'markdown'),
 	'native': True,
@@ -35,7 +28,6 @@ info = {
 	'export': True,
 	'usebase': True,
 }
-
 
 bullet_pattern = '(?:[\\*\u2022]|\\[[ \\*x><]\\]|\\d+\\.|[a-zA-Z]\\.)[\\ \\t]+'
 	# bullets can be '*' or 0x2022 for normal items
@@ -329,8 +321,6 @@ class WikiParser(object):
 			wraps.append(0)
 
 		attrib = {'aligns': ','.join(aligns), 'wraps': ','.join(map(str, wraps))}
-		if self.blockquote_indent:
-			attrib['indent'] = self.blockquote_indent
 		builder.start(TABLE, attrib)
 
 		builder.start(HEADROW)
@@ -342,6 +332,7 @@ class WikiParser(object):
 		for bodyrow in rows:
 			while len(bodyrow) < n_cols:
 				bodyrow.append('')
+
 			builder.start(TABLEROW)
 			for celltext in bodyrow:
 				builder.start(TABLEDATA)
@@ -520,26 +511,18 @@ class Parser(ParserClass):
 	def parse(self, input, file_input=False):
 		if not isinstance(input, str):
 			input = ''.join(input)
-
-		input = input.replace('\u2029', ' ') # Unicode PARAGRAPH SEPARATOR, causes conflict between "splitlines()" and regex "\n" matching - see issues #1760
+		input = input.replace('\u2029', ' ') # Unicode PARAGRAPH SEPARATOR
 		input = fix_unicode_whitespace(input)
 
-		meta, version = None, False
-		if file_input:
-			input, meta = parse_header_lines(input)
-			version = meta.get('Wiki-Format')
+		logger.debug('=======rnb.parse')
+		logger.debug(input)
 
-		# Support backward compatibility - see history notes WIKI_FORMAT_VERSION
-		version = version or self.version
-		if version == 'zim 0.6':
-			mywikiparser = wikiparser
-		elif version in ('zim 0.4', 'zim 0.5'):
-			mywikiparser = WikiParser(backward_url_parsing=True)
-		else:
-			mywikiparser = WikiParser(backward_indented_blocks=True, backward_url_parsing=True)
+		meta = None
+		if file_input:
+			input, meta = parse_frontmatter(input)
 
 		builder = ParseTreeBuilder()
-		mywikiparser(builder, input)
+		wikiparser(builder, input)
 
 		parsetree = builder.get_parsetree()
 		if meta is not None:
@@ -552,6 +535,56 @@ class Parser(ParserClass):
 				if k not in ('Content-Type', 'Wiki-Format', 'Modification-Date'):
 					parsetree.meta[k] = v
 		return parsetree
+
+
+from zim.base import LastDefinedOrderedDict
+
+_is_header_re = re.compile(r'^([\w\-]+):\s+(.*?)\n', re.M)
+_is_continue_re = re.compile(r'^([^\S\n]+)(.+?)\n', re.M)
+
+_yaml_front_matter_re = re.compile(r'\A---[ \t]*\n(.*?\n)(\.\.\.|---)[ \t]*\n\n?', re.DOTALL)
+_yaml_kv_re = re.compile(r'^([\w-]+):\s+(.*?)$', re.M)
+
+def parse_frontmatter(text):
+	'''Read frontmatter :
+
+		---
+		title: This is the title
+		date: 2026-11-08
+		tags: [foo, bar, baz]
+		---
+
+	@returns: tuple of (body_text, meta_dict)
+	'''
+	assert isinstance(text, str)
+	logger.debug(text)
+	meta = LastDefinedOrderedDict()
+	m = _yaml_front_matter_re.match(text)
+	if m:
+		yaml_block = m.group(1)
+		for kv in _yaml_kv_re.finditer(yaml_block):
+			k, v = kv.group(1), kv.group(2)
+			meta[k] = v.strip()
+		# XXX Keep frontmatter in body to be able to edit metas
+		# text = text[m.end():]
+	logger.debug(text)
+	return text, meta
+
+def dump_frontmatter(headers):
+	'''Dump metadata as YAML front matter string.
+
+	@param headers: dict or iterable of key-value pairs
+	@returns: string with YAML front matter block, or empty string if no meta
+	'''
+	if not headers:
+		return ''
+	elif hasattr(headers, 'items'):
+		headers = headers.items
+	lines = ['---\n']
+	for k, v in headers:
+		lines.append('%s: "%s"\n' % (k, v))
+	lines.append('...\n')
+	return ''.join(lines)
 
 
 class Dumper(TextDumper):
@@ -580,14 +613,21 @@ class Dumper(TextDumper):
 		# If file_output=True we add meta headers to the output
 		# would be nicer to handle this via a template, but works for now
 		if file_output:
-			header = (
-				('Content-Type', 'text/x-zim-rnb'),
+			headers = [
+				('Content-Type', 'text/rnb'),
 				('Wiki-Format', WIKI_FORMAT_VERSION),
-			)
+			]
+			if hasattr(tree, 'meta') and tree.meta:
+				for k, v in tree.meta.items():
+					if k != 'Wiki-Format':
+						headers.append((k, v))
+	
 			body = TextDumper.dump(self, tree)
 			if not body[-1].endswith('\n'):
 				body[-1] = body[-1] + '\n'
-			return [dump_header_lines(header, getattr(tree, 'meta', {})), '\n'] + body
+			return body
+			# XXX Frontmatter is included in body for now
+			# return [dump_frontmatter(headers), '\n'] + body
 		else:
 			return TextDumper.dump(self, tree)
 

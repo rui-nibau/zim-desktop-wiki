@@ -253,7 +253,7 @@ class Notebook(ConnectorMixin, SignalEmitter):
 		if config['Notebook']['notebook_layout'] == 'files':
 			layout = FilesLayout(
 				folder,
-				default_format=zim.formats.valid_file_format(config['Notebook']['default_file_format']),
+				default_format=config['Notebook']['default_file_format'],
 				default_extension=config['Notebook']['default_file_extension'],
 				endofline=config['Notebook']['endofline']
 			)

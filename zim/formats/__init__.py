@@ -236,14 +236,6 @@ def list_formats(type):
 	else:
 		assert False, 'TODO'
 
-def valid_file_format(file_format):
-	'''Returns a valid file format for notebook. The given file_format if it is valid or the default one ('zim-wiki')'''
-	if file_format:
-		for n, l in list_formats(NATIVE_FORMAT):
-			if file_format == n:
-				return file_format
-	logger.warning('File format "%s" unknown, using default format "%s"', file_format, 'zim-wiki')
-	return 'zim-wiki'
 
 _aliases = {
 	'zim-wiki': 'wiki',

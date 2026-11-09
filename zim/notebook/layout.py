@@ -107,8 +107,11 @@ class FilesLayout(NotebookLayout):
 
 		self.supported_formats = {n: get_format(n) for n, l in list_formats(NATIVE_FORMAT)}
 		self.supported_extensions = {}
+		# XXX Do not override an existing regristration
 		for name, format in self.supported_formats.items():
-			self.supported_extensions.update({e: format for e in format.info['extensions']})
+			for e in format.info['extensions']:
+				if e not in self.supported_extensions:
+					self.supported_extensions[e] = format
 		self.set_format(default_format, default_extension)
 	
 	def set_format(self, default_format: str, default_extension: str):
@@ -132,7 +135,8 @@ class FilesLayout(NotebookLayout):
 			pname = decode_filename(file.basename)
 			if encode_filename(pname) != file.basename: # will reject e.g. whitespace in file name
 				return False
-
+			if self.supported_extensions[ext].info['mimetype'] == 'text/rnb':
+				return True
 			if self.supported_extensions[ext].info['mimetype'] == 'text/x-zim-wiki':
 				# To avoid reading all text files, check for zim specific header
 				try:
